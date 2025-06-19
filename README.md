@@ -23,7 +23,8 @@ This will guide you through creating and configuring the GitHub App.
    
 3. Set Repository permissions:
    - **Actions**: Read and write
-   - **Contents**: Read
+   - **Contents**: Read and write
+   - **Pull requests**: Read and write
    - **Metadata**: Read
    
 4. Where can this GitHub App be installed: "Only on this account"
@@ -55,6 +56,17 @@ GITHUB_REPO=workflow-test
 
 ## Usage
 
+### Check Workflow Status
+
+```bash
+uv run python check_workflow.py
+```
+
+This will:
+1. Check if the workflow file exists
+2. Show any open PRs for the workflow
+3. Optionally create a PR to add the workflow
+
 ### Run the Workflow
 
 ```bash
@@ -62,10 +74,19 @@ uv run python run_workflow.py
 ```
 
 This will:
-1. Authenticate as the GitHub App
-2. Trigger the test workflow
-3. Poll for completion
-4. Display the logs
+1. Check if the workflow exists (create PR if needed)
+2. Authenticate as the GitHub App
+3. Trigger the test workflow
+4. Poll for completion
+5. Display the logs
+
+### Workflow Management
+
+The `workflow_manager.py` module provides functionality to:
+- Check if the workflow file exists
+- Find open PRs that would create the workflow
+- Create a PR to add the workflow file
+- Ensure the workflow exists before running
 
 ### GitHub App Webhook Handler
 
@@ -74,6 +95,8 @@ The repository includes a simple Flask app (`app.py`) that can handle GitHub web
 ## Files
 
 - `run_workflow.py` - Main script to trigger and monitor workflows
+- `workflow_manager.py` - Module for workflow file management and PR creation
+- `check_workflow.py` - Script to check workflow status and create PRs
 - `app.py` - GitHub App webhook handler (Flask)
 - `setup_github_app.py` - Interactive setup helper
 - `.github/workflows/test-workflow.yml` - The test workflow that gets triggered

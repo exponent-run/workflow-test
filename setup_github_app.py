@@ -20,7 +20,8 @@ def main():
     print("   - Webhook: Uncheck 'Active'")
     print("\n   Repository permissions:")
     print("   - Actions: Read and write")
-    print("   - Contents: Read")
+    print("   - Contents: Read and write")
+    print("   - Pull requests: Read and write")
     print("   - Metadata: Read")
     print("\n   - Where can this GitHub App be installed: 'Only on this account'")
     
