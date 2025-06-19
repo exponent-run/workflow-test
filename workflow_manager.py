@@ -76,40 +76,57 @@ jobs:
         return workflow_prs
     
     def create_workflow_pr(self):
-        """Create a PR to add the workflow file."""
+        """Create a PR to add the workflow file using Git Data API."""
         repo = self.get_repo()
-        
-        # Create a new branch
         default_branch = repo.default_branch
-        base_ref = repo.get_git_ref(f'heads/{default_branch}')
         branch_name = f'add-workflow-{datetime.now().strftime("%Y%m%d-%H%M%S")}'
         
-        # Create new branch
-        repo.create_git_ref(
-            ref=f'refs/heads/{branch_name}',
-            sha=base_ref.object.sha
-        )
-        
-        # Create the workflow file in the new branch
         try:
-            # Check if .github directory exists
-            try:
-                repo.get_contents('.github', ref=branch_name)
-            except GithubException:
-                # Create .github directory first
-                repo.create_file(
-                    path='.github/.gitkeep',
-                    message='Create .github directory',
-                    content='',
-                    branch=branch_name
-                )
+            # Get the SHA of the latest commit on the default branch
+            base_sha = repo.get_branch(default_branch).commit.sha
             
-            # Create the workflow file
-            repo.create_file(
-                path=self.workflow_path,
-                message='Add test workflow',
+            # Get the commit
+            base_commit = repo.get_git_commit(base_sha)
+            
+            # Get the tree
+            base_tree = repo.get_git_tree(base_commit.tree.sha, recursive=True)
+            
+            # Create blob for the workflow file
+            workflow_blob = repo.create_git_blob(
                 content=self.workflow_content,
-                branch=branch_name
+                encoding='utf-8'
+            )
+            
+            # Create tree elements using InputGitTreeElement
+            from github import InputGitTreeElement
+            tree_elements = []
+            
+            # Add the workflow file
+            tree_elements.append(InputGitTreeElement(
+                path=self.workflow_path,
+                mode='100644',
+                type='blob',
+                sha=workflow_blob.sha
+            ))
+            
+            # Create new tree
+            new_tree = repo.create_git_tree(
+                tree=tree_elements,
+                base_tree=base_tree
+            )
+            
+            # Create commit
+            commit_message = 'Add test workflow'
+            new_commit = repo.create_git_commit(
+                message=commit_message,
+                tree=new_tree,
+                parents=[base_commit]
+            )
+            
+            # Create branch reference
+            repo.create_git_ref(
+                ref=f'refs/heads/{branch_name}',
+                sha=new_commit.sha
             )
             
             # Create pull request
@@ -133,7 +150,7 @@ This workflow is used for testing programmatic workflow execution via the GitHub
             }
             
         except Exception as e:
-            # Clean up branch if PR creation failed
+            # Try to clean up branch if it was created
             try:
                 ref = repo.get_git_ref(f'heads/{branch_name}')
                 ref.delete()
