@@ -18,6 +18,9 @@ from github import Github, GithubIntegration
 # Load environment variables
 load_dotenv()
 
+# Import workflow manager
+from workflow_manager import WorkflowManager
+
 class GitHubWorkflowRunner:
     def __init__(self):
         self.app_id = os.getenv('GITHUB_APP_ID')
@@ -89,6 +92,9 @@ class GitHubWorkflowRunner:
             'Accept': 'application/vnd.github.v3+json'
         }
         
+        # Get current time for filtering
+        trigger_time = datetime.now(timezone.utc)
+        
         # Trigger workflow
         url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/workflows/{self.workflow_file}/dispatches'
         data = {
@@ -100,21 +106,27 @@ class GitHubWorkflowRunner:
         resp.raise_for_status()
         print("Workflow triggered successfully!")
         
-        # Wait a moment for the run to be created
-        time.sleep(2)
-        
-        # Get the latest run
+        # Poll for the new run
+        print("Waiting for workflow run to be created...")
         runs_url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/runs'
-        resp = requests.get(runs_url, headers=headers)
-        resp.raise_for_status()
-        runs = resp.json()['workflow_runs']
         
-        if not runs:
-            raise ValueError("No workflow runs found")
+        for attempt in range(10):  # Try for up to 30 seconds
+            time.sleep(3)
+            
+            resp = requests.get(runs_url, headers=headers)
+            resp.raise_for_status()
+            runs = resp.json()['workflow_runs']
+            
+            # Look for a run created after we triggered
+            for run in runs:
+                created_at = datetime.fromisoformat(run['created_at'].replace('Z', '+00:00'))
+                if created_at > trigger_time and run['name'] == 'Test Workflow':
+                    print(f"Found workflow run: {run['id']}")
+                    return run['id'], token
+            
+            print(f"  Attempt {attempt + 1}/10: No new runs found yet...")
         
-        # Find the run we just triggered
-        latest_run = runs[0]
-        return latest_run['id'], token
+        raise ValueError("Workflow run was not created within 30 seconds")
     
     def wait_for_completion(self, run_id, token):
         """Poll for workflow completion."""
@@ -171,9 +183,38 @@ class GitHubWorkflowRunner:
         
         return logs
     
-    def run(self):
+    def check_and_ensure_workflow(self):
+        """Check if workflow exists and handle accordingly."""
+        token = self.get_installation_token()
+        manager = WorkflowManager(github_token=token)
+        
+        print("Checking workflow status...")
+        result = manager.ensure_workflow_exists()
+        
+        if result['status'] == 'exists':
+            print("✓ Workflow file exists")
+            return True
+        elif result['status'] == 'pr_open':
+            print(f"⚠️  {result['message']}")
+            print(f"   PR URL: {result['pr_url']}")
+            print("\nPlease merge the PR and then run this script again.")
+            return False
+        elif result['status'] == 'pr_created':
+            print(f"✓ {result['message']}")
+            print(f"   PR URL: {result['pr_url']}")
+            print("\nPlease review and merge the PR, then run this script again.")
+            return False
+        
+        return False
+    
+    def run(self, skip_workflow_check=False):
         """Main execution flow."""
         try:
+            # Check if workflow exists first (unless skipped)
+            if not skip_workflow_check:
+                if not self.check_and_ensure_workflow():
+                    return
+            
             # Trigger workflow
             run_id, token = self.trigger_workflow()
             
