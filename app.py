@@ -14,7 +14,6 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# GitHub App configuration
 WEBHOOK_SECRET = os.getenv('GITHUB_WEBHOOK_SECRET', '')
 
 def verify_webhook_signature(payload, signature):
@@ -32,19 +31,15 @@ def verify_webhook_signature(payload, signature):
 
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
-    """Handle GitHub webhook events."""
-    # Verify signature
     signature = request.headers.get('X-Hub-Signature-256', '')
     if not verify_webhook_signature(request.data, signature):
         return jsonify({'error': 'Invalid signature'}), 401
     
-    # Parse event
     event = request.headers.get('X-GitHub-Event', '')
     payload = request.json
     
     print(f"Received {event} event")
     
-    # Handle different events
     if event == 'installation':
         action = payload.get('action')
         print(f"Installation {action} for {payload.get('installation', {}).get('account', {}).get('login')}")
@@ -56,9 +51,7 @@ def handle_webhook():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint."""
     return jsonify({'status': 'healthy'})
 
 if __name__ == '__main__':
-    # Note: In production, use a proper WSGI server
     app.run(host='0.0.0.0', port=3000, debug=True)

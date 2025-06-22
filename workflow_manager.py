@@ -14,7 +14,6 @@ load_dotenv()
 
 class WorkflowManager:
     def __init__(self, github_client=None):
-        """Initialize with GitHub client."""
         self.client = github_client or GitHubClient()
         self.g = self.client.get_github_instance()
         self.owner = self.client.owner
@@ -40,11 +39,9 @@ jobs:
         run: tree || (apt-get update && apt-get install -y tree && tree)"""
     
     def get_repo(self):
-        """Get the repository object."""
         return self.g.get_repo(f"{self.owner}/{self.repo_name}")
     
     def check_workflow_exists(self):
-        """Check if the workflow file exists in the default branch."""
         repo = self.get_repo()
         try:
             repo.get_contents(self.workflow_path)
@@ -55,13 +52,11 @@ jobs:
             raise
     
     def check_open_prs(self):
-        """Check for open PRs that create the workflow file."""
         repo = self.get_repo()
         open_prs = repo.get_pulls(state='open')
         
         workflow_prs = []
         for pr in open_prs:
-            # Check if this PR modifies our workflow file
             files = pr.get_files()
             for file in files:
                 if file.filename == self.workflow_path:
@@ -83,26 +78,18 @@ jobs:
         branch_name = f'add-workflow-{datetime.now().strftime("%Y%m%d-%H%M%S")}'
         
         try:
-            # Get the SHA of the latest commit on the default branch
             base_sha = repo.get_branch(default_branch).commit.sha
-            
-            # Get the commit
             base_commit = repo.get_git_commit(base_sha)
-            
-            # Get the tree
             base_tree = repo.get_git_tree(base_commit.tree.sha, recursive=True)
             
-            # Create blob for the workflow file
             workflow_blob = repo.create_git_blob(
                 content=self.workflow_content,
                 encoding='utf-8'
             )
             
-            # Create tree elements using InputGitTreeElement
             from github import InputGitTreeElement
             tree_elements = []
             
-            # Add the workflow file
             tree_elements.append(InputGitTreeElement(
                 path=self.workflow_path,
                 mode='100644',
@@ -110,13 +97,11 @@ jobs:
                 sha=workflow_blob.sha
             ))
             
-            # Create new tree
             new_tree = repo.create_git_tree(
                 tree=tree_elements,
                 base_tree=base_tree
             )
             
-            # Create commit
             commit_message = 'Add test workflow'
             new_commit = repo.create_git_commit(
                 message=commit_message,
@@ -124,13 +109,11 @@ jobs:
                 parents=[base_commit]
             )
             
-            # Create branch reference
             repo.create_git_ref(
                 ref=f'refs/heads/{branch_name}',
                 sha=new_commit.sha
             )
             
-            # Create pull request
             pr = repo.create_pull(
                 title='Add test workflow',
                 body='''This PR adds a GitHub Actions workflow that:
@@ -151,7 +134,6 @@ This workflow is used for testing programmatic workflow execution via the GitHub
             }
             
         except Exception as e:
-            # Try to clean up branch if it was created
             try:
                 ref = repo.get_git_ref(f'heads/{branch_name}')
                 ref.delete()
@@ -167,11 +149,9 @@ This workflow is used for testing programmatic workflow execution via the GitHub
             'needs_creation': False
         }
         
-        # Check if workflow exists
         status['exists'] = self.check_workflow_exists()
         
         if not status['exists']:
-            # Check for open PRs
             status['open_prs'] = self.check_open_prs()
             status['needs_creation'] = len(status['open_prs']) == 0
         
@@ -196,7 +176,6 @@ This workflow is used for testing programmatic workflow execution via the GitHub
                 'pr_number': pr['number']
             }
         
-        # Create a new PR
         pr_info = self.create_workflow_pr()
         return {
             'status': 'pr_created',
@@ -207,11 +186,9 @@ This workflow is used for testing programmatic workflow execution via the GitHub
 
 
 if __name__ == '__main__':
-    # Example usage
     client = GitHubClient()
     manager = WorkflowManager(github_client=client)
     
-    # Check status
     print("Checking workflow status...")
     status = manager.get_workflow_status()
     

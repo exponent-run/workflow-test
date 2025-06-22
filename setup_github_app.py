@@ -12,7 +12,6 @@ def main():
     print("="*50)
     print("\nThis script will help you create and configure the GitHub App.")
     
-    # Open browser to create app
     print("\n1. Opening browser to create GitHub App...")
     print("   Please fill in the following:")
     print("   - App name: Indent Test")
@@ -28,24 +27,19 @@ def main():
     input("\nPress Enter to open the browser...")
     webbrowser.open("https://github.com/organizations/exponent-run/settings/apps/new")
     
-    # Get App ID
     print("\n2. After creating the app, you'll see the App ID on the settings page.")
     app_id = input("   Enter the App ID: ").strip()
     
-    # Private key
     print("\n3. Click 'Generate a private key' and save it as 'private-key.pem' in this directory.")
     input("   Press Enter when you've saved the private key...")
     
-    # Installation
     print("\n4. Now we need to install the app to the repository.")
     print("   On the app settings page, click 'Install App'")
     print("   Select the 'workflow-test' repository and click 'Install'")
     input("   Press Enter when you've installed the app...")
     
-    # Create .env file
     print("\n5. Creating .env file...")
-    env_content = f"""# GitHub App Configuration
-GITHUB_APP_ID={app_id}
+    env_content = f"""GITHUB_APP_ID={app_id}
 GITHUB_APP_PRIVATE_KEY_PATH=private-key.pem
 GITHUB_OWNER=exponent-run
 GITHUB_REPO=workflow-test
@@ -55,7 +49,7 @@ GITHUB_REPO=workflow-test
         f.write(env_content)
     
     print("\nSetup complete! You can now run:")
-    print("  uv run python run_workflow.py")
+    print("  uv run python workflow_cli.py run")
 
 if __name__ == '__main__':
     main()

@@ -17,7 +17,6 @@ class WorkflowCLI:
         self.workflow_file = 'test-workflow.yml'
     
     def check_status(self, create_pr=False):
-        """Check workflow status and optionally create PR if missing."""
         print("Checking workflow status...")
         status = self.manager.get_workflow_status()
         
@@ -52,23 +51,17 @@ class WorkflowCLI:
             return False
     
     def run_workflow(self, check_first=True):
-        """Run the GitHub workflow."""
-        # Check if workflow exists first (unless skipped)
         if check_first:
             if not self.check_status():
                 return
         
         try:
-            # Trigger workflow
             run_id = self.client.trigger_workflow(self.workflow_file)
-            
-            # Wait for completion
             completed_run = self.client.wait_for_workflow_completion(run_id)
             
             print(f"\nWorkflow completed with conclusion: {completed_run['conclusion']}")
             print(f"URL: {completed_run['html_url']}")
             
-            # Get and display logs
             print("\n" + "="*60)
             print("WORKFLOW LOGS:")
             print("="*60 + "\n")
@@ -83,7 +76,6 @@ class WorkflowCLI:
             sys.exit(1)
     
     def main(self):
-        """Main CLI entry point."""
         parser = argparse.ArgumentParser(
             description='GitHub Workflow CLI - Check status, create PRs, and run workflows',
             formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -105,7 +97,6 @@ Examples:
         
         subparsers = parser.add_subparsers(dest='command', help='Command to run')
         
-        # Check command
         check_parser = subparsers.add_parser('check', help='Check workflow status')
         check_parser.add_argument(
             '--create-pr', 
@@ -113,7 +104,6 @@ Examples:
             help='Create PR if workflow file is missing'
         )
         
-        # Run command
         run_parser = subparsers.add_parser('run', help='Run the workflow')
         run_parser.add_argument(
             '--skip-check',
@@ -123,12 +113,10 @@ Examples:
         
         args = parser.parse_args()
         
-        # If no command specified, show help
         if not args.command:
             parser.print_help()
             sys.exit(0)
         
-        # Execute command
         if args.command == 'check':
             self.check_status(create_pr=args.create_pr)
         elif args.command == 'run':

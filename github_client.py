@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 from github import Github, GithubIntegration
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 
@@ -27,7 +26,6 @@ class GitHubClient:
         if not self.app_id:
             raise ValueError("GITHUB_APP_ID not set in environment")
         
-        # Load private key
         try:
             with open(self.private_key_path, 'r') as key_file:
                 self.private_key = key_file.read()
@@ -49,19 +47,16 @@ class GitHubClient:
     
     def get_installation_token(self, force_refresh=False):
         """Get an installation access token for the repository."""
-        # Check if we have a valid cached token
         if not force_refresh and self._token and self._token_expires:
             if datetime.now(timezone.utc) < self._token_expires:
                 return self._token
         
-        # Get a new token
         jwt_token = self.create_jwt()
         headers = {
             'Authorization': f'Bearer {jwt_token}',
             'Accept': 'application/vnd.github.v3+json'
         }
         
-        # Get installations
         resp = requests.get(
             'https://api.github.com/app/installations',
             headers=headers
@@ -69,7 +64,6 @@ class GitHubClient:
         resp.raise_for_status()
         installations = resp.json()
         
-        # Find installation for our repo
         installation_id = None
         for installation in installations:
             if installation['account']['login'] == self.owner:
@@ -79,7 +73,6 @@ class GitHubClient:
         if not installation_id:
             raise ValueError(f"No installation found for {self.owner}")
         
-        # Get installation token
         resp = requests.post(
             f'https://api.github.com/app/installations/{installation_id}/access_tokens',
             headers=headers
@@ -95,12 +88,10 @@ class GitHubClient:
         return self._token
     
     def get_github_instance(self):
-        """Get an authenticated GitHub instance using PyGithub."""
         token = self.get_installation_token()
         return Github(token)
     
     def get_headers(self):
-        """Get headers for direct API requests."""
         token = self.get_installation_token()
         return {
             'Authorization': f'token {token}',
@@ -108,13 +99,9 @@ class GitHubClient:
         }
     
     def trigger_workflow(self, workflow_file, ref='main'):
-        """Trigger a GitHub workflow."""
         headers = self.get_headers()
-        
-        # Get current time for filtering
         trigger_time = datetime.now(timezone.utc)
         
-        # Trigger workflow
         url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/workflows/{workflow_file}/dispatches'
         data = {'ref': ref}
         
@@ -123,7 +110,6 @@ class GitHubClient:
         resp.raise_for_status()
         print("Workflow triggered successfully!")
         
-        # Poll for the new run
         print("Waiting for workflow run to be created...")
         runs_url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/runs'
         
@@ -134,7 +120,6 @@ class GitHubClient:
             resp.raise_for_status()
             runs = resp.json()['workflow_runs']
             
-            # Look for a run created after we triggered
             for run in runs:
                 created_at = datetime.fromisoformat(run['created_at'].replace('Z', '+00:00'))
                 if created_at > trigger_time and workflow_file in run['path']:
@@ -146,7 +131,6 @@ class GitHubClient:
         raise ValueError("Workflow run was not created within 30 seconds")
     
     def wait_for_workflow_completion(self, run_id):
-        """Poll for workflow completion."""
         headers = self.get_headers()
         url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/runs/{run_id}'
         
@@ -167,10 +151,8 @@ class GitHubClient:
             time.sleep(5)
     
     def get_workflow_logs(self, run_id):
-        """Get logs for all jobs in the workflow run."""
         headers = self.get_headers()
         
-        # Get jobs for the run
         jobs_url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/runs/{run_id}/jobs'
         resp = requests.get(jobs_url, headers=headers)
         resp.raise_for_status()
@@ -181,7 +163,6 @@ class GitHubClient:
             job_id = job['id']
             job_name = job['name']
             
-            # Get logs for this job
             logs_url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/jobs/{job_id}/logs'
             resp = requests.get(logs_url, headers=headers)
             
