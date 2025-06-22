@@ -6,7 +6,7 @@ This project demonstrates programmatic execution of GitHub Actions workflows usi
 
 Run the setup helper:
 ```bash
-uv run python setup_github_app.py
+uv run python scripts/setup.py
 ```
 
 This will guide you through creating and configuring the GitHub App.
@@ -98,34 +98,30 @@ uv run python app.py
 
 ## Architecture
 
-The codebase has been simplified into three core modules:
+The codebase consists of just 3 core operational files:
 
-### Core Modules
+### Core Files
 
-- `github_client.py` - Centralized GitHub authentication and API operations
-  - JWT creation and token management
-  - Workflow triggering and monitoring
-  - Log retrieval
+1. **`github_client.py`** - GitHub API client with authentication
+   - JWT creation and token management with caching
+   - Workflow triggering and monitoring
+   - Log retrieval
 
-- `workflow_manager.py` - Workflow file management
-  - Check if workflow exists
-  - Find open PRs for workflow creation
-  - Create PRs using Git Data API
+2. **`workflow_cli.py`** - Command-line interface and workflow management
+   - Check workflow status
+   - Create PRs for missing workflows
+   - Run workflows with monitoring
+   - All workflow management logic integrated
 
-- `workflow_cli.py` - Unified CLI for all workflow operations
-  - Check workflow status
-  - Create PRs for missing workflows
-  - Run workflows with monitoring
+3. **`app.py`** - Webhook server for GitHub events (optional)
+   - Handle GitHub App webhook events
+   - Can be used for automated triggers
 
-### Entry Points
+### Supporting Files
 
-- `setup_github_app.py` - Interactive setup helper
-- `workflow_cli.py` - Main CLI for workflow operations
-- `app.py` - Webhook server for GitHub events
-
-### Files
-
+- `scripts/setup.py` - One-time interactive setup helper
 - `.github/workflows/test-workflow.yml` - The test workflow that gets triggered
+- Configuration files: `pyproject.toml`, `.env.example`, `.gitignore`
 
 ## How it Works
 
