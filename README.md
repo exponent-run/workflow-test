@@ -59,46 +59,72 @@ GITHUB_REPO=workflow-test
 ### Check Workflow Status
 
 ```bash
-uv run python check_workflow.py
+uv run python workflow_cli.py check
 ```
 
 This will:
 1. Check if the workflow file exists
 2. Show any open PRs for the workflow
-3. Optionally create a PR to add the workflow
+
+To create a PR if the workflow is missing:
+```bash
+uv run python workflow_cli.py check --create-pr
+```
 
 ### Run the Workflow
 
 ```bash
-uv run python run_workflow.py
+uv run python workflow_cli.py run
 ```
 
 This will:
-1. Check if the workflow exists (create PR if needed)
+1. Check if the workflow exists
 2. Authenticate as the GitHub App
 3. Trigger the test workflow
 4. Poll for completion
 5. Display the logs
 
-### Workflow Management
-
-The `workflow_manager.py` module provides functionality to:
-- Check if the workflow file exists
-- Find open PRs that would create the workflow
-- Create a PR to add the workflow file
-- Ensure the workflow exists before running
+To skip the existence check:
+```bash
+uv run python workflow_cli.py run --skip-check
+```
 
 ### GitHub App Webhook Handler
 
-The repository includes a simple Flask app (`app.py`) that can handle GitHub webhooks if needed.
+The repository includes a Flask app (`app.py`) that can handle GitHub webhooks if needed:
+```bash
+uv run python app.py
+```
 
-## Files
+## Architecture
 
-- `run_workflow.py` - Main script to trigger and monitor workflows
-- `workflow_manager.py` - Module for workflow file management and PR creation
-- `check_workflow.py` - Script to check workflow status and create PRs
-- `app.py` - GitHub App webhook handler (Flask)
+The codebase has been simplified into three core modules:
+
+### Core Modules
+
+- `github_client.py` - Centralized GitHub authentication and API operations
+  - JWT creation and token management
+  - Workflow triggering and monitoring
+  - Log retrieval
+
+- `workflow_manager.py` - Workflow file management
+  - Check if workflow exists
+  - Find open PRs for workflow creation
+  - Create PRs using Git Data API
+
+- `workflow_cli.py` - Unified CLI for all workflow operations
+  - Check workflow status
+  - Create PRs for missing workflows
+  - Run workflows with monitoring
+
+### Entry Points
+
 - `setup_github_app.py` - Interactive setup helper
+- `workflow_cli.py` - Main CLI for workflow operations
+- `app.py` - Webhook server for GitHub events
+
+### Files
+
 - `.github/workflows/test-workflow.yml` - The test workflow that gets triggered
 
 ## How it Works

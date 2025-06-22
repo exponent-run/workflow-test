@@ -8,16 +8,17 @@ import base64
 from datetime import datetime
 from github import Github, GithubException
 from dotenv import load_dotenv
+from github_client import GitHubClient
 
 load_dotenv()
 
 class WorkflowManager:
-    def __init__(self, github_token=None):
-        """Initialize with GitHub token (can be installation token or PAT)."""
-        self.token = github_token
-        self.g = Github(self.token)
-        self.owner = os.getenv('GITHUB_OWNER', 'exponent-run')
-        self.repo_name = os.getenv('GITHUB_REPO', 'workflow-test')
+    def __init__(self, github_client=None):
+        """Initialize with GitHub client."""
+        self.client = github_client or GitHubClient()
+        self.g = self.client.get_github_instance()
+        self.owner = self.client.owner
+        self.repo_name = self.client.repo
         self.workflow_path = '.github/workflows/test-workflow.yml'
         self.workflow_content = """name: Test Workflow
 
@@ -207,14 +208,8 @@ This workflow is used for testing programmatic workflow execution via the GitHub
 
 if __name__ == '__main__':
     # Example usage
-    from run_workflow import GitHubWorkflowRunner
-    
-    # Get an installation token
-    runner = GitHubWorkflowRunner()
-    token = runner.get_installation_token()
-    
-    # Create workflow manager
-    manager = WorkflowManager(github_token=token)
+    client = GitHubClient()
+    manager = WorkflowManager(github_client=client)
     
     # Check status
     print("Checking workflow status...")
