@@ -1,33 +1,28 @@
 #!/usr/bin/env python3
 """
-Script to trigger GitHub workflow and display results using GitHub App authentication.
+Unified GitHub client with authentication and API operations.
 """
 
 import os
-import sys
 import time
-import json
-from datetime import datetime, timezone
-from pathlib import Path
-
 import jwt
 import requests
-from dotenv import load_dotenv
+from datetime import datetime, timezone
 from github import Github, GithubIntegration
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Import workflow manager
-from workflow_manager import WorkflowManager
 
-class GitHubWorkflowRunner:
+class GitHubClient:
+    """Handles GitHub App authentication and API operations."""
+    
     def __init__(self):
         self.app_id = os.getenv('GITHUB_APP_ID')
         self.private_key_path = os.getenv('GITHUB_APP_PRIVATE_KEY_PATH', 'private-key.pem')
         self.owner = os.getenv('GITHUB_OWNER', 'exponent-run')
         self.repo = os.getenv('GITHUB_REPO', 'workflow-test')
-        self.workflow_file = 'test-workflow.yml'
         
         if not self.app_id:
             raise ValueError("GITHUB_APP_ID not set in environment")
@@ -38,6 +33,9 @@ class GitHubWorkflowRunner:
                 self.private_key = key_file.read()
         except FileNotFoundError:
             raise ValueError(f"Private key file not found at {self.private_key_path}")
+        
+        self._token = None
+        self._token_expires = None
     
     def create_jwt(self):
         """Create a JWT for GitHub App authentication."""
@@ -49,9 +47,14 @@ class GitHubWorkflowRunner:
         }
         return jwt.encode(payload, self.private_key, algorithm='RS256')
     
-    def get_installation_token(self):
+    def get_installation_token(self, force_refresh=False):
         """Get an installation access token for the repository."""
-        # First, get the installation ID
+        # Check if we have a valid cached token
+        if not force_refresh and self._token and self._token_expires:
+            if datetime.now(timezone.utc) < self._token_expires:
+                return self._token
+        
+        # Get a new token
         jwt_token = self.create_jwt()
         headers = {
             'Authorization': f'Bearer {jwt_token}',
@@ -60,7 +63,7 @@ class GitHubWorkflowRunner:
         
         # Get installations
         resp = requests.get(
-            f'https://api.github.com/app/installations',
+            'https://api.github.com/app/installations',
             headers=headers
         )
         resp.raise_for_status()
@@ -82,26 +85,40 @@ class GitHubWorkflowRunner:
             headers=headers
         )
         resp.raise_for_status()
-        return resp.json()['token']
+        
+        token_data = resp.json()
+        self._token = token_data['token']
+        # Token expires in 1 hour, but we'll refresh after 50 minutes to be safe
+        self._token_expires = datetime.now(timezone.utc).replace(microsecond=0) + \
+                             datetime.timedelta(minutes=50)
+        
+        return self._token
     
-    def trigger_workflow(self):
-        """Trigger the GitHub workflow."""
+    def get_github_instance(self):
+        """Get an authenticated GitHub instance using PyGithub."""
         token = self.get_installation_token()
-        headers = {
+        return Github(token)
+    
+    def get_headers(self):
+        """Get headers for direct API requests."""
+        token = self.get_installation_token()
+        return {
             'Authorization': f'token {token}',
             'Accept': 'application/vnd.github.v3+json'
         }
+    
+    def trigger_workflow(self, workflow_file, ref='main'):
+        """Trigger a GitHub workflow."""
+        headers = self.get_headers()
         
         # Get current time for filtering
         trigger_time = datetime.now(timezone.utc)
         
         # Trigger workflow
-        url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/workflows/{self.workflow_file}/dispatches'
-        data = {
-            'ref': 'main'
-        }
+        url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/workflows/{workflow_file}/dispatches'
+        data = {'ref': ref}
         
-        print(f"Triggering workflow: {self.workflow_file}")
+        print(f"Triggering workflow: {workflow_file}")
         resp = requests.post(url, headers=headers, json=data)
         resp.raise_for_status()
         print("Workflow triggered successfully!")
@@ -120,21 +137,17 @@ class GitHubWorkflowRunner:
             # Look for a run created after we triggered
             for run in runs:
                 created_at = datetime.fromisoformat(run['created_at'].replace('Z', '+00:00'))
-                if created_at > trigger_time and run['name'] == 'Test Workflow':
+                if created_at > trigger_time and workflow_file in run['path']:
                     print(f"Found workflow run: {run['id']}")
-                    return run['id'], token
+                    return run['id']
             
             print(f"  Attempt {attempt + 1}/10: No new runs found yet...")
         
         raise ValueError("Workflow run was not created within 30 seconds")
     
-    def wait_for_completion(self, run_id, token):
+    def wait_for_workflow_completion(self, run_id):
         """Poll for workflow completion."""
-        headers = {
-            'Authorization': f'token {token}',
-            'Accept': 'application/vnd.github.v3+json'
-        }
-        
+        headers = self.get_headers()
         url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/runs/{run_id}'
         
         print(f"\nWaiting for workflow run {run_id} to complete...")
@@ -153,12 +166,9 @@ class GitHubWorkflowRunner:
             
             time.sleep(5)
     
-    def get_job_logs(self, run_id, token):
+    def get_workflow_logs(self, run_id):
         """Get logs for all jobs in the workflow run."""
-        headers = {
-            'Authorization': f'token {token}',
-            'Accept': 'application/vnd.github.v3+json'
-        }
+        headers = self.get_headers()
         
         # Get jobs for the run
         jobs_url = f'https://api.github.com/repos/{self.owner}/{self.repo}/actions/runs/{run_id}/jobs'
@@ -182,63 +192,3 @@ class GitHubWorkflowRunner:
                 })
         
         return logs
-    
-    def check_and_ensure_workflow(self):
-        """Check if workflow exists and handle accordingly."""
-        token = self.get_installation_token()
-        manager = WorkflowManager(github_token=token)
-        
-        print("Checking workflow status...")
-        result = manager.ensure_workflow_exists()
-        
-        if result['status'] == 'exists':
-            print("✓ Workflow file exists")
-            return True
-        elif result['status'] == 'pr_open':
-            print(f"⚠️  {result['message']}")
-            print(f"   PR URL: {result['pr_url']}")
-            print("\nPlease merge the PR and then run this script again.")
-            return False
-        elif result['status'] == 'pr_created':
-            print(f"✓ {result['message']}")
-            print(f"   PR URL: {result['pr_url']}")
-            print("\nPlease review and merge the PR, then run this script again.")
-            return False
-        
-        return False
-    
-    def run(self, skip_workflow_check=False):
-        """Main execution flow."""
-        try:
-            # Check if workflow exists first (unless skipped)
-            if not skip_workflow_check:
-                if not self.check_and_ensure_workflow():
-                    return
-            
-            # Trigger workflow
-            run_id, token = self.trigger_workflow()
-            
-            # Wait for completion
-            completed_run = self.wait_for_completion(run_id, token)
-            
-            print(f"\nWorkflow completed with conclusion: {completed_run['conclusion']}")
-            print(f"URL: {completed_run['html_url']}")
-            
-            # Get and display logs
-            print("\n" + "="*60)
-            print("WORKFLOW LOGS:")
-            print("="*60 + "\n")
-            
-            logs = self.get_job_logs(run_id, token)
-            for job_logs in logs:
-                print(f"\n--- Job: {job_logs['job_name']} ---")
-                print(job_logs['logs'])
-            
-        except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
-
-
-if __name__ == '__main__':
-    runner = GitHubWorkflowRunner()
-    runner.run()
