@@ -1,6 +1,6 @@
-# GitHub Workflow Test
+# Indent - GitHub Workflow Automation
 
-This project demonstrates programmatic execution of GitHub Actions workflows using a GitHub App.
+A single-file tool that demonstrates programmatic execution of GitHub Actions workflows using a GitHub App.
 
 ## Quick Setup
 
@@ -59,74 +59,55 @@ GITHUB_REPO=workflow-test
 ### Check Workflow Status
 
 ```bash
-uv run python workflow_cli.py check
+uv run python indent.py check
 ```
-
-This will:
-1. Check if the workflow file exists
-2. Show any open PRs for the workflow
 
 To create a PR if the workflow is missing:
 ```bash
-uv run python workflow_cli.py check --create-pr
+uv run python indent.py check --create-pr
 ```
 
 ### Run the Workflow
 
 ```bash
-uv run python workflow_cli.py run
+uv run python indent.py run
 ```
-
-This will:
-1. Check if the workflow exists
-2. Authenticate as the GitHub App
-3. Trigger the test workflow
-4. Poll for completion
-5. Display the logs
 
 To skip the existence check:
 ```bash
-uv run python workflow_cli.py run --skip-check
+uv run python indent.py run --skip-check
 ```
 
-### GitHub App Webhook Handler
+### Start Webhook Server
 
-The repository includes a Flask app (`app.py`) that can handle GitHub webhooks if needed:
 ```bash
-uv run python app.py
+uv run python indent.py serve
+```
+
+To use a different port:
+```bash
+uv run python indent.py serve --port 8080
 ```
 
 ## Architecture
 
-The codebase consists of just 3 core operational files:
+This project is implemented as a single Python file (`indent.py`) that includes:
 
-### Core Files
+- **GitHub App Authentication**: JWT creation and installation token management
+- **Workflow Management**: Check status, create PRs, and manage workflow files
+- **CLI Interface**: Command-line interface for all operations
+- **Webhook Server**: Flask server to handle GitHub webhook events
+- **PR Comments**: Automatically posts "Hi from Indent" on created PRs
 
-1. **`github_client.py`** - GitHub API client with authentication
-   - JWT creation and token management with caching
-   - Workflow triggering and monitoring
-   - Log retrieval
-
-2. **`workflow_cli.py`** - Command-line interface and workflow management
-   - Check workflow status
-   - Create PRs for missing workflows
-   - Run workflows with monitoring
-   - All workflow management logic integrated
-
-3. **`app.py`** - Webhook server for GitHub events (optional)
-   - Handle GitHub App webhook events
-   - Can be used for automated triggers
-
-### Supporting Files
-
-- `scripts/setup.py` - One-time interactive setup helper
-- `.github/workflows/test-workflow.yml` - The test workflow that gets triggered
-- Configuration files: `pyproject.toml`, `.env.example`, `.gitignore`
+The workflow file (`.github/workflows/test-workflow.yml`) is created via PR when needed.
 
 ## How it Works
 
 1. The GitHub App authenticates using a JWT signed with its private key
 2. It exchanges the JWT for an installation access token
-3. The token is used to trigger the workflow via the GitHub Actions API
+3. The token is used to:
+   - Check if the workflow file exists
+   - Create PRs to add the workflow (with automatic PR comment)
+   - Trigger workflows via the GitHub Actions API
 4. The script polls the API to check workflow status
 5. Once complete, it fetches and displays the logs

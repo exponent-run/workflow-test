@@ -49,7 +49,7 @@ GITHUB_REPO=workflow-test
         f.write(env_content)
     
     print("\nSetup complete! You can now run:")
-    print("  uv run python workflow_cli.py run")
+    print("  uv run python indent.py run")
 
 if __name__ == '__main__':
     main()
